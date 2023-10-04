@@ -9,6 +9,7 @@ from cmspepr_hgcal_core.datasets import Taus2021Dataset
 from cmspepr_hgcal_core.gravnet_model import GravnetModelWithNoiseFilter
 from cmspepr_hgcal_core.objectcondensation import oc_loss_with_noise_filter
 from cmspepr_hgcal_core.utils import assert_no_nans, LossResult
+
 logger = cmspepr_hgcal_core.logger
 
 # device = torch.device('cuda')
@@ -26,6 +27,7 @@ train_loader.dataset.npzs = train_loader.dataset.npzs[:10]
 model = GravnetModelWithNoiseFilter(9, output_dim=3, k=10).to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=1e-4)
 
+
 def train():
     for data in tqdm.tqdm(train_loader):
         optimizer.zero_grad()
@@ -37,7 +39,9 @@ def train():
         loss_result.backward()
         optimizer.step()
 
+
 best_test_loss = torch.inf
+
 
 def test():
     global best_test_loss
@@ -56,7 +60,8 @@ def test():
         best_test_loss = loss.loss
         os.makedirs("models", exist_ok=True)
         torch.save(dict(model=model.state_dict()), ckpt)
-        
+
+
 def test():
     for data in tqdm.tqdm(test_loader):
         optimizer.zero_grad()
@@ -67,6 +72,7 @@ def test():
         loss_result = oc_loss_with_noise_filter(out_gravnet, data, pass_noise_filter)
         loss_result.backward()
         optimizer.step()
+
 
 for i_epoch in range(10):
     logger.info(f'Epoch {i_epoch}')

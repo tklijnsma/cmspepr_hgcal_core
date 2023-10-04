@@ -38,4 +38,3 @@ def setup_logger(name: str = "cmspepr") -> logging.Logger:
 
 
 logger = setup_logger()
-from . import utils

@@ -12,16 +12,20 @@ np.random.seed(1001)
 @pytest.fixture
 def simple_clustering_problem():
     cluster_index = np.array([0, 0, 0, 0, 1, 1, 1, 2, 2, 2])
-    betas = np.random.rand(10) * .01
-    betas[np.array([1, 5, 8])] += .15 # Make fake condensation points
+    betas = np.random.rand(10) * 0.01
+    betas[np.array([1, 5, 8])] += 0.15  # Make fake condensation points
     # Make a clustering space that is easy to cluster
-    cluster_space_coords = np.random.rand(10,2) + 2.*np.expand_dims(cluster_index, -1)
+    cluster_space_coords = np.random.rand(10, 2) + 2.0 * np.expand_dims(
+        cluster_index, -1
+    )
     return betas, cluster_space_coords
+
 
 def test_get_clustering_np(simple_clustering_problem):
     output = oc.get_clustering_np(*simple_clustering_problem)
     expected_output = np.array([1, 1, 1, 1, 5, 5, 5, 8, 8, 8])
     np.testing.assert_array_equal(output, expected_output)
+
 
 def test_get_clustering_torch(simple_clustering_problem):
     betas, cluster_space_coords = simple_clustering_problem
@@ -47,13 +51,15 @@ def test_reincrementalize():
 
 
 def test_oc():
-    model_out = torch.FloatTensor([
-        [.01, 0.40, 0.40],
-        [.01, 0.10, 0.90],
-        [.12, 0.70, 0.70],
-        [.01, 0.90, 0.10],
-        [.13, 0.72, 0.72],
-        ])
+    model_out = torch.FloatTensor(
+        [
+            [0.01, 0.40, 0.40],
+            [0.01, 0.10, 0.90],
+            [0.12, 0.70, 0.70],
+            [0.01, 0.90, 0.10],
+            [0.13, 0.72, 0.72],
+        ]
+    )
     y = torch.LongTensor([0, 0, 1, 0, 1])
     lr = oc.ObjectCondensation(model_out, y).loss()
     print(lr)
@@ -73,7 +79,7 @@ def test_oc_batch():
     lr_batch = oc.oc_loss(model_out, data)
     lr1 = oc.ObjectCondensation(model_out[:4], data.y[:4]).loss()
     lr2 = oc.ObjectCondensation(model_out[4:], data.y[4:]).loss()
-    assert ((lr1+lr2)/2.).loss == lr_batch.loss
+    assert ((lr1 + lr2) / 2.0).loss == lr_batch.loss
 
 
 def test_oc_batch_noise_filter():
@@ -91,7 +97,9 @@ def test_oc_batch_noise_filter():
             1, 1, 0, 1, 1, 1, 0
             ])
     # fmt: on
-    lr_with_noise_filter = oc.oc_loss_with_noise_filter(model_out, data, pass_noise_filter)
+    lr_with_noise_filter = oc.oc_loss_with_noise_filter(
+        model_out, data, pass_noise_filter
+    )
     # Compute manual
     data2 = Data(y=data.y[pass_noise_filter], batch=data.batch[pass_noise_filter])
     lr_manual = oc.oc_loss(model_out, data2)

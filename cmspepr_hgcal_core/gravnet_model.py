@@ -9,6 +9,7 @@ from cmspepr_hgcal_core.utils import scatter_count
 
 from typing import Tuple, Union, List
 
+
 def global_exchange(x: Tensor, batch: Tensor) -> Tensor:
     """
     Adds columns for the means, mins, and maxs per feature, per batch.
@@ -20,18 +21,21 @@ def global_exchange(x: Tensor, batch: Tensor) -> Tensor:
     batch_size = int(batch.max()) + 1
 
     # minmeanmax: (batch_size x 3*n_features)
-    meanminmax = torch.cat((
-        scatter_mean(x, batch, dim=0),
-        scatter_min(x, batch, dim=0)[0],
-        scatter_max(x, batch, dim=0)[0]
-        ), dim=1)
-    assert list(meanminmax.size()) == [batch_size, 3*n_features]
+    meanminmax = torch.cat(
+        (
+            scatter_mean(x, batch, dim=0),
+            scatter_min(x, batch, dim=0)[0],
+            scatter_max(x, batch, dim=0)[0],
+        ),
+        dim=1,
+    )
+    assert list(meanminmax.size()) == [batch_size, 3 * n_features]
 
     meanminmax = torch.repeat_interleave(meanminmax, n_hits_per_event, dim=0)
-    assert list(meanminmax.size()) == [n_hits, 3*n_features]
+    assert list(meanminmax.size()) == [n_hits, 3 * n_features]
 
     out = torch.cat((meanminmax, x), dim=1)
-    assert out.size() == (n_hits, 4*n_features)
+    assert out.size() == (n_hits, 4 * n_features)
     assert out.device == x.device
     return out
 
@@ -57,19 +61,21 @@ def global_exchange(x: Tensor, batch: Tensor) -> Tensor:
 # energy fraction belonging to each shower. Batch normalisation
 # is applied in all models to the input and after each block.
 
-class GravNetBlock(nn.Module):
 
+class GravNetBlock(nn.Module):
     def __init__(
         self,
-        in_channels: int, out_channels: int = 96,
-        space_dimensions: int = 4, propagate_dimensions: int = 22, k: int = 40
-        ):
+        in_channels: int,
+        out_channels: int = 96,
+        space_dimensions: int = 4,
+        propagate_dimensions: int = 22,
+        k: int = 40,
+    ):
         super(GravNetBlock, self).__init__()
         # Includes all layers up to the global_exchange
         self.gravnet_layer = GravNetConv(
-                in_channels, out_channels,
-                space_dimensions, propagate_dimensions, k
-                ).jittable()
+            in_channels, out_channels, space_dimensions, propagate_dimensions, k
+        ).jittable()
         self.post_gravnet = nn.Sequential(
             nn.BatchNorm1d(out_channels),
             nn.Linear(out_channels, 128),
@@ -77,12 +83,10 @@ class GravNetBlock(nn.Module):
             nn.BatchNorm1d(128),
             nn.Linear(128, 96),
             nn.Tanh(),
-            )
+        )
         self.output = nn.Sequential(
-            nn.Linear(4*96, 96),
-            nn.Tanh(),
-            nn.BatchNorm1d(96)
-            )
+            nn.Linear(4 * 96, 96), nn.Tanh(), nn.BatchNorm1d(96)
+        )
 
     def forward(self, x: Tensor, batch: Tensor) -> Tensor:
         x = self.gravnet_layer(x, batch)
@@ -95,15 +99,14 @@ class GravNetBlock(nn.Module):
 
 
 class GravnetModel(nn.Module):
-
     def __init__(
-        self, 
-        input_dim: int=5,
-        output_dim: int=4,
-        n_gravnet_blocks: int=4,
-        n_postgn_dense_blocks: int=4,
+        self,
+        input_dim: int = 5,
+        output_dim: int = 4,
+        n_gravnet_blocks: int = 4,
+        n_postgn_dense_blocks: int = 4,
         k: Union[List[int], int] = 40,
-        ):
+    ):
         super(GravnetModel, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -111,37 +114,42 @@ class GravnetModel(nn.Module):
         self.n_postgn_dense_blocks = n_postgn_dense_blocks
 
         self.batchnorm1 = nn.BatchNorm1d(self.input_dim)
-        self.input = nn.Linear(4*input_dim, 64)
+        self.input = nn.Linear(4 * input_dim, 64)
 
         if isinstance(k, int):
-            k = n_gravnet_blocks*[k]
+            k = n_gravnet_blocks * [k]
 
         assert len(k) == n_gravnet_blocks
-        
+
         # Note: out_channels of the internal gravnet layer
         # not clearly specified in paper
-        self.gravnet_blocks = nn.ModuleList([
-            GravNetBlock(64 if i==0 else 96, k=k[i]) for i in range(self.n_gravnet_blocks)
-            ])
+        self.gravnet_blocks = nn.ModuleList(
+            [
+                GravNetBlock(64 if i == 0 else 96, k=k[i])
+                for i in range(self.n_gravnet_blocks)
+            ]
+        )
 
         # Post-GravNet dense layers
         postgn_dense_modules = nn.ModuleList()
         for i in range(self.n_postgn_dense_blocks):
-            postgn_dense_modules.extend([
-                nn.Linear(4*96 if i==0 else 128, 128),
-                nn.ReLU(),
-                nn.BatchNorm1d(128),
-                ])
+            postgn_dense_modules.extend(
+                [
+                    nn.Linear(4 * 96 if i == 0 else 128, 128),
+                    nn.ReLU(),
+                    nn.BatchNorm1d(128),
+                ]
+            )
         self.postgn_dense = nn.Sequential(*postgn_dense_modules)
-        
+
         # Output block
         self.output = nn.Sequential(
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, self.output_dim)
-            )
+            nn.Linear(64, self.output_dim),
+        )
 
     def forward(self, data: Data) -> Tensor:
         device = data.x.device
@@ -150,12 +158,12 @@ class GravnetModel(nn.Module):
         x = self.input(x)
         assert x.device == device
 
-        x_gravnet_per_block = [] # To store intermediate outputs
+        x_gravnet_per_block = []  # To store intermediate outputs
         for gravnet_block in self.gravnet_blocks:
             x = gravnet_block(x, data.batch)
             x_gravnet_per_block.append(x)
         x = torch.cat(x_gravnet_per_block, dim=-1)
-        assert x.size() == (x.size(0), 4*96)
+        assert x.size() == (x.size(0), 4 * 96)
         assert x.device == device
 
         x = self.postgn_dense(x)
@@ -165,12 +173,11 @@ class GravnetModel(nn.Module):
 
 
 class NoiseFilterModel(nn.Module):
-
     def __init__(
-        self, 
-        input_dim: int=5,
-        output_dim: int=2,
-        ):
+        self,
+        input_dim: int = 5,
+        output_dim: int = 2,
+    ):
         super(NoiseFilterModel, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -183,34 +190,37 @@ class NoiseFilterModel(nn.Module):
             nn.Linear(32, 16),
             nn.ReLU(),
             nn.Linear(16, 2),
-            nn.LogSoftmax(dim=-1)
-            )
+            nn.LogSoftmax(dim=-1),
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         return self.network(x)
 
 
 class GravnetModelWithNoiseFilter(nn.Module):
-
-    def __init__(self,
-        input_dim: int=5,
-        output_dim: int=4,
-        n_gravnet_blocks: int=4,
-        n_postgn_dense_blocks: int=4,
+    def __init__(
+        self,
+        input_dim: int = 5,
+        output_dim: int = 4,
+        n_gravnet_blocks: int = 4,
+        n_postgn_dense_blocks: int = 4,
         k: Union[List[int], int] = 40,
-        signal_threshold: float=.05,
-        noise_filter_kwargs: dict=None
-        ):
+        signal_threshold: float = 0.05,
+        noise_filter_kwargs: dict = None,
+    ):
         super(GravnetModelWithNoiseFilter, self).__init__()
         self.signal_threshold = signal_threshold
-        self.gravnet = GravnetModel(input_dim, output_dim, n_gravnet_blocks, n_postgn_dense_blocks, k)
-        if noise_filter_kwargs is None: noise_filter_kwargs = {}
+        self.gravnet = GravnetModel(
+            input_dim, output_dim, n_gravnet_blocks, n_postgn_dense_blocks, k
+        )
+        if noise_filter_kwargs is None:
+            noise_filter_kwargs = {}
         noise_filter_kwargs['input_dim'] = self.gravnet.input_dim
         self.noise_filter = NoiseFilterModel(**noise_filter_kwargs)
 
     def forward(self, data: Data) -> Tuple[Tensor, Tensor, Tensor]:
         out_noise_filter = self.noise_filter(data.x)
-        pass_noise_filter = torch.exp(out_noise_filter[:,1]) > self.signal_threshold
+        pass_noise_filter = torch.exp(out_noise_filter[:, 1]) > self.signal_threshold
         # Get the GravNet model output on only hits that pass the noise threshold
         data = Data(x=data.x[pass_noise_filter], batch=data.batch[pass_noise_filter])
         out_gravnet = self.gravnet(data)

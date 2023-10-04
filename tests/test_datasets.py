@@ -2,48 +2,51 @@ import numpy as np
 import torch
 import cmspepr_hgcal_core.datasets as datasets
 
+
 def test_incremental_cluster_index():
     input = torch.LongTensor([13, 4, 4, 13, 4, 13, 13, 42, 4, 4])
     assert torch.allclose(
         datasets.incremental_cluster_index(input),
-        torch.LongTensor([1, 0, 0, 1, 0, 1, 1, 2, 0, 0])
-        )
+        torch.LongTensor([1, 0, 0, 1, 0, 1, 1, 2, 0, 0]),
+    )
     # Noise index should get 0 if it is supplied:
     assert torch.allclose(
         datasets.incremental_cluster_index(input, noise_index=13),
-        torch.LongTensor([0, 1, 1, 0, 1, 0, 0, 2, 1, 1])
-        )
+        torch.LongTensor([0, 1, 1, 0, 1, 0, 0, 2, 1, 1]),
+    )
     # 0 should still be reserved for noise_index even if it is not present:
     assert torch.allclose(
         datasets.incremental_cluster_index(input, noise_index=-99),
-        torch.LongTensor([2, 1, 1, 2, 1, 2, 2, 3, 1, 1])
-        )
+        torch.LongTensor([2, 1, 1, 2, 1, 2, 2, 3, 1, 1]),
+    )
+
 
 def test_incremental_cluster_index_np():
     input = np.array([13, 4, 4, 13, 4, 13, 13, 42, 4, 4])
     np.testing.assert_array_equal(
         datasets.incremental_cluster_index_np(input),
-        np.array([1, 0, 0, 1, 0, 1, 1, 2, 0, 0])
-        )
+        np.array([1, 0, 0, 1, 0, 1, 1, 2, 0, 0]),
+    )
     # Noise index should get 0 if it is supplied:
     np.testing.assert_array_equal(
         datasets.incremental_cluster_index_np(input, noise_index=13),
-        np.array([0, 1, 1, 0, 1, 0, 0, 2, 1, 1])
-        )
+        np.array([0, 1, 1, 0, 1, 0, 0, 2, 1, 1]),
+    )
     # 0 should still be reserved for noise_index even if it is not present:
     np.testing.assert_array_equal(
         datasets.incremental_cluster_index_np(input, noise_index=-99),
-        np.array([2, 1, 1, 2, 1, 2, 2, 3, 1, 1])
-        )
+        np.array([2, 1, 1, 2, 1, 2, 2, 3, 1, 1]),
+    )
+
 
 def test_noise_reduction():
     input = np.array([9, -1, 9, 9, -1, -1, -1, 9, -1, -1, -1, -1, 9])
-    mask = datasets.mask_fraction_of_noise(input, .5)
+    mask = datasets.mask_fraction_of_noise(input, 0.5)
     assert mask.shape[0] == input.shape[0]
-    assert mask.sum() == 5+4
+    assert mask.sum() == 5 + 4
     out = input[mask]
     assert (out == 9).sum() == (input == 9).sum()
-    assert (out == -1).sum() == .5*(input == -1).sum()
+    assert (out == -1).sum() == 0.5 * (input == -1).sum()
 
 
 def test_npzfile_inst_to_torch_data():
@@ -69,15 +72,15 @@ def test_npzfile_inst_to_torch_data():
     recHitTruthTime = np.random.rand(10, 1)
     recHitTruthID = np.random.rand(10, 1)
     d = {
-        'recHitFeatures' : X,
-        'recHitTruthClusterIdx' : y,
-        'recHitTruthEnergy' : recHitTruthEnergy,
-        'recHitTruthPosition' : recHitTruthPosition,
-        'recHitTruthTime' : recHitTruthTime,
-        'recHitTruthID' : recHitTruthID,
-        }
+        'recHitFeatures': X,
+        'recHitTruthClusterIdx': y,
+        'recHitTruthEnergy': recHitTruthEnergy,
+        'recHitTruthPosition': recHitTruthPosition,
+        'recHitTruthTime': recHitTruthTime,
+        'recHitTruthID': recHitTruthID,
+    }
     data = datasets._taus2021_npzfile_inst_to_torch_data(d)
     assert data.x.size() == X.shape
-    assert data.x[:,7].mean() > 0.
-    assert len(torch.unique(data.y)) == torch.max(data.y)+1
+    assert data.x[:, 7].mean() > 0.0
+    assert len(torch.unique(data.y)) == torch.max(data.y) + 1
     assert data.npz == 'mem'

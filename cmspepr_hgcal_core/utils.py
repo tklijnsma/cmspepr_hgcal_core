@@ -1,8 +1,6 @@
 from __future__ import annotations
-from typing import Tuple, Union
-import numpy as np
 import torch
-from torch_scatter import scatter_max, scatter_add, scatter_mean
+from torch_scatter import scatter_add
 
 
 def assert_no_nans(x):
@@ -61,8 +59,9 @@ def scatter_counts_to_indices(input: torch.LongTensor) -> torch.LongTensor:
     input:  [3, 2, 2]
     output: [0, 0, 0, 1, 1, 2, 2]
     """
-    return torch.repeat_interleave(torch.arange(input.size(0), device=input.device), input).long()
-
+    return torch.repeat_interleave(
+        torch.arange(input.size(0), device=input.device), input
+    ).long()
 
 
 class LossResult:
@@ -80,7 +79,7 @@ class LossResult:
         return self.components.__getitem__(*args, **kwargs)
 
     @property
-    def loss(self):
+    def loss(self) -> torch.float:
         """The final summed-up loss value of all passed components.
 
         Returns:

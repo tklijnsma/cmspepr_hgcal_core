@@ -1,13 +1,16 @@
-from typing import Tuple, Union
 import numpy as np
 import torch
-from torch_scatter import scatter_max, scatter_add, scatter_mean
+from torch_scatter import scatter_max
 from torch_geometric.data import Data
 
-from cmspepr_hgcal_core.utils import huber, scatter_count, scatter_counts_to_indices, LossResult, assert_no_nans
+from cmspepr_hgcal_core.utils import (
+    huber,
+    scatter_count,
+    LossResult,
+)
 
 
-def oc_loss(model_output: torch.FloatTensor, data: Data):
+def oc_loss(model_output: torch.FloatTensor, data: Data) -> LossResult:
     """Calculator for the object condensation loss function *per batch*.
 
     Creates an ObjectCondensation per event in the batch and adds up individual losses.
@@ -20,16 +23,20 @@ def oc_loss(model_output: torch.FloatTensor, data: Data):
     return loss_result / float(n_events)
 
 
-def oc_loss_with_noise_filter(model_output: torch.FloatTensor, data: Data, pass_noise_filter: torch.IntTensor):
+def oc_loss_with_noise_filter(
+    model_output: torch.FloatTensor, data: Data, pass_noise_filter: torch.IntTensor
+) -> LossResult:
     n_events = data.batch.max() + 1
     loss_result = LossResult()
     y = data.y[pass_noise_filter]
     batch = data.batch[pass_noise_filter]
     for i_event in range(n_events):
         select = batch == i_event
-        loss_result += ObjectCondensation(model_output[select], reincrementalize(y[select])).loss()
+        loss_result += ObjectCondensation(
+            model_output[select], reincrementalize(y[select])
+        ).loss()
     return loss_result / float(n_events)
-    
+
 
 class ObjectCondensation:
     """Calculator for the object condensation loss function.
@@ -42,6 +49,7 @@ class ObjectCondensation:
             clustering space. There is currently no support for property determination.
         y (torch.LongTensor): The truth cluster index per hit.
     """
+
     # Optional huberization for V_att distances
     huberize_norm_for_V_att = True
 
@@ -65,7 +73,7 @@ class ObjectCondensation:
         assert not torch.isnan(x).any()
         # Quantities that will surely be used can be calculated now:
         self.beta = torch.sigmoid(x[:, 0])
-        self.x = x[:, 1:] # Cluster space coordinates
+        self.x = x[:, 1:]  # Cluster space coordinates
         self.y = y
 
         # Terminology: "Signal" points are points belonging to an actual shape (i.e. NOT
@@ -73,8 +81,10 @@ class ObjectCondensation:
         self.is_noise = y == 0
         self.is_sig = ~self.is_noise
         self.n = x.size(0)
-        self.n_sig = self.is_sig.sum() # Number of signal hits (i.e. non-noise hits)
-        self.n_cond = torch.max(y) # Number of condensation points == number of clusters
+        self.n_sig = self.is_sig.sum()  # Number of signal hits (i.e. non-noise hits)
+        self.n_cond = torch.max(
+            y
+        )  # Number of condensation points == number of clusters
 
         self.x_sig = self.x[self.is_sig]
 
@@ -85,7 +95,6 @@ class ObjectCondensation:
         # Number of points per cluster / cond point
         self.n_per_cond = scatter_count(self.y_sig)
 
-
     def loss(self) -> LossResult:
         # Calculate q
         if self.beta_stabilizing == 'betaclip':
@@ -93,23 +102,25 @@ class ObjectCondensation:
         elif self.beta_stabilizing == 'paper':
             self.calc_q_paper()
         else:
-            raise Exception(f'Unknown beta_stabilizing option {self.beta_stabilizing};'
-                            ' Pick from "betaclip" or "paper"'
-                            )
+            raise Exception(
+                f'Unknown beta_stabilizing option {self.beta_stabilizing};'
+                ' Pick from "betaclip" or "paper"'
+            )
 
         if self.beta_term_option == 'paper':
             L_beta_sig = self.L_beta_sig_paper
         elif self.beta_term_option == 'short_range_potential':
             L_beta_sig = self.L_beta_sig_short_range_potential
         else:
-            raise Exception(f'Unknown beta_term_option option {self.beta_term_option};'
-                            ' Pick from "short_range_potential" or "paper"'
-                            )
+            raise Exception(
+                f'Unknown beta_term_option option {self.beta_term_option};'
+                ' Pick from "short_range_potential" or "paper"'
+            )
 
         return LossResult(
             V_att=self.V_att,
             V_rep=self.V_rep,
-            L_beta_sig = L_beta_sig,
+            L_beta_sig=L_beta_sig,
             L_beta_sig_logterm=self.L_beta_sig_logterm,
             L_beta_noise=self.L_beta_noise,
         )
@@ -256,7 +267,9 @@ class ObjectCondensation:
         return (-0.2 * torch.log(self.beta_cond + 1e-9)).mean()
 
 
-def get_clustering_np(betas: np.array, X: np.array, tbeta: float=.1, td: float=1.) -> np.array:
+def get_clustering_np(
+    betas: np.array, X: np.array, tbeta: float = 0.1, td: float = 1.0
+) -> np.array:
     """
     Returns a clustering of hits -> cluster_index, based on the GravNet model
     output (predicted betas and cluster space coordinates) and the clustering
@@ -282,7 +295,7 @@ def get_clustering_np(betas: np.array, X: np.array, tbeta: float=.1, td: float=1
     return clustering
 
 
-def get_clustering(betas: torch.Tensor, X: torch.Tensor, tbeta=.1, td=1.):
+def get_clustering(betas: torch.Tensor, X: torch.Tensor, tbeta=0.1, td=1.0):
     """
     Returns a clustering of hits -> cluster_index, based on the GravNet model
     output (predicted betas and cluster space coordinates) and the clustering
@@ -317,7 +330,6 @@ def reincrementalize(y: torch.Tensor) -> torch.Tensor:
     """
     vals, indices = torch.unique(y, return_inverse=True)
     return torch.arange(len(vals))[indices]
-
 
 
 # def reincrementalize(y: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
