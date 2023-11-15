@@ -201,7 +201,8 @@ def _taus2021_npzfile_inst_to_torch_data(
     """
     x = d['recHitFeatures']
     y = d['recHitTruthClusterIdx'].squeeze()
-    if flip:
+    endcap = 'neg' if np.mean(x[:,7]) < 0 else 'pos'
+    if flip and endcap=='neg':
         # Flip z-dependent coordinates
         x[:, 1] *= -1  # eta
         x[:, 7] *= -1  # z
@@ -229,6 +230,7 @@ def _taus2021_npzfile_inst_to_torch_data(
         truth_cluster_props=torch.from_numpy(truth_cluster_props).type(torch.float),
     )
     data.npz = npz_path
+    data.endcap = endcap
     return data
 
 
