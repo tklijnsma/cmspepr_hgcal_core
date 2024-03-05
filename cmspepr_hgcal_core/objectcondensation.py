@@ -329,7 +329,7 @@ def reincrementalize(y: torch.Tensor) -> torch.Tensor:
         tensor([0, 3, 1, 0, 1, 3, 2, 0, 2])
     """
     vals, indices = torch.unique(y, return_inverse=True)
-    return torch.arange(len(vals))[indices]
+    return torch.arange(len(vals), device=y.device)[indices]
 
 
 # def reincrementalize(y: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
